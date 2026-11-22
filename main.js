@@ -198,6 +198,11 @@ async function runCapture(contents) {
       }
       await sleep(WAIT);
     }
+    if (arg('after')) {
+      // 점검용: 캡처 직전에 방 화면에서 값을 읽어 출력한다
+      const out = await win.webContents.executeJavaScript(fs.readFileSync(arg('after'), 'utf8'), true);
+      console.log('AFTER ' + JSON.stringify(out));
+    }
     const meta = await contents.executeJavaScript(
       `({ url: location.href, title: document.title, w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
           signedIn: !!document.querySelector('#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn, button#avatar-btn'),

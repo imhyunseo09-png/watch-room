@@ -213,9 +213,9 @@ function moveMouseTo(nx, ny) {
 }
 
 /* ───────── 카메라 (휠로 가까이/멀리) ───────── */
-let dolly = 0.8, dollyTarget = 0.8;
+let dolly = 0.7, dollyTarget = 0.7;
 const CAM_WIDE = { p: new THREE.Vector3(0, 1.0, 1.9), t: new THREE.Vector3(0, 0.55, -0.15) };
-const CAM_NEAR = { p: new THREE.Vector3(0, 0.6, 0.48), t: new THREE.Vector3(0, 0.515, -0.16) };
+const CAM_NEAR = { p: new THREE.Vector3(0, 0.7, 0.42), t: new THREE.Vector3(0, 0.555, -0.16) };
 function placeCamera() {
   camera.position.lerpVectors(CAM_WIDE.p, CAM_NEAR.p, dolly);
   camera.lookAt(new THREE.Vector3().lerpVectors(CAM_WIDE.t, CAM_NEAR.t, dolly));
