@@ -1,0 +1,14 @@
+{
+  "name": "watch-room",
+  "version": "0.2.0",
+  "description": "같이 보는 방 — 친구들과 노트북으로 유튜브를 보는 게임",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "web": "node server.js --open"
+  },
+  "devDependencies": {
+    "electron": "^45.4.1"
+  }
+}
