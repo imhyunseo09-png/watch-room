@@ -80,7 +80,7 @@ function openOutside(url) {
 
 if (CAPTURE_DIR) {
   // 점검용 캡처는 보통 실제 앱의 로그인·기록과 섞이지 않게 임시 프로필을 쓴다
-  if (!REAL_PROFILE) app.setPath('userData', path.join(app.getPath('temp'), 'watch-room-capture'));
+  if (!REAL_PROFILE) app.setPath('userData', path.join(app.getPath('temp'), 'watch-room-capture' + (arg('tmp') ? '-' + arg('tmp').replace(/[^\w-]/g, '') : '')));
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion');
 }
 if ((!CAPTURE_DIR || REAL_PROFILE) && !app.requestSingleInstanceLock()) {
@@ -134,14 +134,14 @@ function createWindow() {
   });
 
   const start = START_URL && isYouTube(START_URL) ? { query: { url: START_URL } } : undefined;
-  win.loadFile(path.join(__dirname, 'index.html'), start);
+  win.loadFile(path.join(__dirname, arg('page') || 'index.html'), start);
 
   // 방 화면 자체는 다른 곳으로 이동하거나 새 창을 띄우지 않는다
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.webContents.on('will-navigate', e => e.preventDefault());
 
   win.webContents.on('will-attach-webview', (e, prefs, params) => {
-    delete prefs.preload;
+    prefs.preload = path.join(__dirname, 'guest-preload.js'); // 우리 것만 허용
     prefs.nodeIntegration = false;
     prefs.contextIsolation = true;
     prefs.sandbox = true;
@@ -185,14 +185,24 @@ async function runCapture(contents) {
     await sleep(WAIT);
     if (DO) {
       // 점검용: 방 화면에서 스크립트를 한 번 실행한 뒤(예: 검색해 보기) 다시 기다렸다가 찍는다
-      await win.webContents.executeJavaScript(fs.readFileSync(DO, 'utf8'), true);
+      const r = await win.webContents.executeJavaScript(fs.readFileSync(DO, 'utf8'), true);
+      if (r && r.click) {
+        // 점검용: 방 화면 좌표에 진짜 마우스 클릭을 보낸다
+        const p = { x: Math.round(r.click.x), y: Math.round(r.click.y), button: 'left', clickCount: 1 };
+        // 실제 입력 경로(노트북 속 유튜브까지의 좌표 판정 포함)를 타도록 디버거 프로토콜로 보낸다
+        const dbg = win.webContents.debugger;
+        if (!dbg.isAttached()) dbg.attach('1.3');
+        const ev = type => dbg.sendCommand('Input.dispatchMouseEvent', { type, x: p.x, y: p.y, button: type === 'mouseMoved' ? 'none' : 'left', clickCount: type === 'mouseMoved' ? 0 : 1 });
+        await ev('mouseMoved'); await ev('mousePressed'); await ev('mouseReleased');
+        console.log('CLICK ' + JSON.stringify(p));
+      }
       await sleep(WAIT);
     }
     const meta = await contents.executeJavaScript(
       `({ url: location.href, title: document.title, w: innerWidth, h: innerHeight, dpr: devicePixelRatio,
           signedIn: !!document.querySelector('#avatar-btn, ytd-topbar-menu-button-renderer #avatar-btn, button#avatar-btn'),
           signInButton: !!document.querySelector('a[href*="ServiceLogin"]'),
-          ua: navigator.userAgent })`);
+          ua: navigator.userAgent, clk: window.__clk || null, active: document.activeElement && (document.activeElement.name || document.activeElement.id || document.activeElement.tagName) })`);
     const shot = await contents.capturePage();
     fs.writeFileSync(path.join(CAPTURE_DIR, 'laptop-screen.png'), shot.toPNG());
     const scene = await win.webContents.capturePage();
