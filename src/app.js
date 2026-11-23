@@ -214,7 +214,7 @@ function moveMouseTo(nx, ny) {
 
 /* ───────── 카메라 (휠로 가까이/멀리) ───────── */
 let dolly = 0.7, dollyTarget = 0.7;
-const CAM_WIDE = { p: new THREE.Vector3(0, 1.0, 1.9), t: new THREE.Vector3(0, 0.55, -0.15) };
+const CAM_WIDE = { p: new THREE.Vector3(0, 1.15, 2.4), t: new THREE.Vector3(0, 0.66, -0.15) };
 const CAM_NEAR = { p: new THREE.Vector3(0, 0.7, 0.42), t: new THREE.Vector3(0, 0.555, -0.16) };
 function placeCamera() {
   camera.position.lerpVectors(CAM_WIDE.p, CAM_NEAR.p, dolly);
@@ -415,7 +415,7 @@ function placeLabels() {
   for (const id in chars) {
     const c = chars[id], l = labels[id];
     head.set(0, c.headHeight + 0.06, 0); c.root.localToWorld(head).project(camera);
-    const x = (head.x + 1) / 2 * innerWidth, y = (1 - head.y) / 2 * innerHeight;
+    const x = (head.x + 1) / 2 * innerWidth, y = Math.max(64, (1 - head.y) / 2 * innerHeight);
     l.tag.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`;
     l.bubble.style.transform = `translate(${x}px,${y - 30}px) translate(-50%,-100%)`;
     l.tag.classList.toggle('on', themeId === id);
