@@ -38,7 +38,8 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(50, 1, 0.05, 200);
-const composer = new EffectComposer(renderer);
+// 후처리를 거쳐도 가장자리가 계단지지 않도록 4배 멀티샘플 버퍼를 쓴다
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 }));
 composer.addPass(new RenderPass(scene, camera));
 let themePass = null;
 const outputPass = new OutputPass();
