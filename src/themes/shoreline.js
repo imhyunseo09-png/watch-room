@@ -9,7 +9,7 @@
 const PAL = {
   CREAM: [0.80, 0.77, 0.68], PALE: [0.66, 0.68, 0.64], GREEN: [0.18, 0.44, 0.37], NAVY: [0.10, 0.15, 0.20],
   ORANGE: [0.88, 0.45, 0.12], GOLD: [0.78, 0.60, 0.26],
-  TEAL: [0.07, 0.20, 0.19], PANEL: [0.15, 0.40, 0.32], BOX: [0.72, 0.60, 0.42], WOOD: [0.50, 0.33, 0.20], SEAM: [0.52, 0.49, 0.42],
+  TEAL: [0.07, 0.20, 0.19], PANEL: [0.22, 0.44, 0.36], BOX: [0.72, 0.60, 0.42], WOOD: [0.50, 0.33, 0.20], SEAM: [0.68, 0.60, 0.46],
 };
 
 /* ── 게임의 칠 느낌을 three.js 표준 재질에 얹는다 (직접 빛 계산만 바꿈) ── */
@@ -32,19 +32,40 @@ void RE_Direct_Shoreline( const in IncidentLight directLight, const in vec3 geom
 #undef RE_Direct
 #define RE_Direct RE_Direct_Shoreline
 `;
-function gamePatch(sh) {
-  sh.fragmentShader = sh.fragmentShader.replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + GAME_LIGHT);
+// 게임의 판 그림(고무·에나멜)은 세계 좌표로 입혀져 어디에나 고운 알갱이와 얼룩이 있다: 같은 것을 세계 좌표 잡음으로 만든다
+const GRAIN_PARS = /* glsl */`
+varying vec3 vGrainPos;
+float gHash( vec3 p ) { p = fract( p * vec3( 0.1031, 0.1030, 0.0973 ) ); p += dot( p, p.yzx + 33.33 ); return fract( ( p.x + p.y ) * p.z ); }
+float gNoise( vec3 p ) {
+  vec3 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( mix( gHash( i ), gHash( i + vec3( 1, 0, 0 ) ), f.x ), mix( gHash( i + vec3( 0, 1, 0 ) ), gHash( i + vec3( 1, 1, 0 ) ), f.x ), f.y ),
+              mix( mix( gHash( i + vec3( 0, 0, 1 ) ), gHash( i + vec3( 1, 0, 1 ) ), f.x ), mix( gHash( i + vec3( 0, 1, 1 ) ), gHash( i + vec3( 1, 1, 1 ) ), f.x ), f.y ), f.z );
 }
-const gameKey = () => 'shoreline-station-paint-1';
+float gGrain() {
+  float px = length( fwidth( vGrainPos ) );                       // 화면 한 점이 덮는 길이: 그보다 고운 알갱이는 흐려서 반짝이지 않게
+  float fine = ( gHash( floor( vGrainPos / 0.004 ) ) - 0.5 ) * clamp( 0.004 / ( px * 1.2 ), 0.0, 1.0 );
+  float mid = ( gNoise( vGrainPos / 0.012 ) - 0.5 ) * clamp( 0.012 / ( px * 1.5 ), 0.0, 1.0 );
+  float blot = gNoise( vGrainPos / 0.11 ) - 0.5 + 0.5 * ( gNoise( vGrainPos / 0.37 ) - 0.5 );
+  return 1.0 + GRAIN_FINE * fine + GRAIN_FINE * 0.8 * mid + GRAIN_BLOT * blot;
+}
+`;
+function gamePatch(sh) {
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos;')
+    .replace('#include <project_vertex>', '#include <project_vertex>\nvGrainPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n#define GRAIN_FINE 0.34\n#define GRAIN_BLOT 0.09\n' + GRAIN_PARS)
+    .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= gGrain();')
+    .replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + GAME_LIGHT);
+}
+const gameKey = () => 'shoreline-station-paint-2';
 function styleOn(m) { m.onBeforeCompile = gamePatch; m.customProgramCacheKey = gameKey; m.needsUpdate = true; }
 function styleOff(m) { delete m.onBeforeCompile; delete m.customProgramCacheKey; m.needsUpdate = true; }
 
 /* ── 화면 전체 후처리: AgX(노출 1.2) → 대비·채도 → 모서리 어둡게·알갱이 ── */
 const POST = {
-  uniforms: { uExposure: { value: 1.2 }, uContrast: { value: 1.1 }, uSaturation: { value: 1.1 }, uCorners: { value: 0.16 }, uGrain: { value: 0.006 } },
+  uniforms: { uExposure: { value: 1.2 }, uContrast: { value: 1.0 }, uSaturation: { value: 1.0 }, uLift: { value: 0.045 }, uCorners: { value: 0.16 }, uGrain: { value: 0.012 } },
   fragmentShader: /* glsl */`
     uniform sampler2D tDiffuse; uniform float uTime; uniform vec2 uRes;
-    uniform float uExposure, uContrast, uSaturation, uCorners, uGrain;
+    uniform float uExposure, uContrast, uSaturation, uLift, uCorners, uGrain;
     varying vec2 vUv;
     vec3 agxContrast( vec3 x ) {
       vec3 x2 = x * x; vec3 x4 = x2 * x2;
@@ -67,7 +88,8 @@ const POST = {
       vec3 c = agx( texture2D( tDiffuse, vUv ).rgb * uExposure );
       c = pow( c, vec3( 1.0 / 2.2 ) );                              // 여기부터 화면에 보이는 값으로 (게임의 보정이 이 값에서 이루어짐)
       c = mix( vec3( 0.5 ), c, uContrast );
-      c = mix( vec3( dot( c, vec3( 0.33333 ) ) ), c, uSaturation );
+      c = mix( vec3( dot( c, vec3( 0.2126, 0.7152, 0.0722 ) ) ), c, uSaturation );
+      c = c + uLift * vec3( 0.95, 1.0, 0.98 ) * ( 1.0 - c ) * ( 1.0 - c );       // 게임 실내의 뿌연 공기: 어두운 곳이 검정까지 내려가지 않는다
       vec2 q = ( vUv - 0.5 ) * vec2( 1.25, 1.0 );
       float edge = smoothstep( 0.3, 0.9, length( q ) * 1.3 );
       float g = hash( floor( gl_FragCoord.xy * 0.5 ) + vec2( fract( uTime * 7.0 ) * 37.0, fract( uTime * 3.0 ) * 53.0 ) ) - 0.5;
@@ -147,8 +169,8 @@ export default {
       const m = mats[k]; if (!m || !m.isMeshStandardMaterial) continue;
       m.color.copy(snap(THREE, m.color)); m.metalness = Math.min(m.metalness, 0.12); m.roughness = Math.max(m.roughness, 0.72);
     }
-    col(mats.floor, [0.14, 0.36, 0.30], 0.88); mats.floor.map = S.tex.floor;      // 바닥은 초록 갑판
-    col(mats.wall, PAL.CREAM, 0.8); mats.wall.map = S.tex.wall;                   // 벽은 크림 판
+    col(mats.floor, [0.23, 0.41, 0.36], 0.88); mats.floor.map = S.tex.floor;      // 바닥은 초록 갑판
+    col(mats.wall, [0.82, 0.73, 0.57], 0.8); mats.wall.map = S.tex.wall;                   // 벽은 크림 판
     for (const k of ['floor', 'wall', 'ceiling', 'table', 'tableLeg', 'cushionA', 'cushionB', 'laptopBody', 'laptopDark', 'keycap', 'mouseBody', 'cable']) { styleOn(mats[k]); S.styled.push(mats[k]); }
     mats.floor.needsUpdate = mats.wall.needsUpdate = true;
     parts.decor.visible = false; parts.rug.visible = false; parts.rugRing.visible = false;
@@ -168,7 +190,7 @@ export default {
     const M = {
       navy: gm(PAL.NAVY), teal: gm(PAL.TEAL), cream: gm(PAL.CREAM, 0.8), pale: gm(PAL.PALE, 0.78), green: gm(PAL.PANEL, 0.74), deck: gm([0.11, 0.30, 0.25], 0.9),
       box: gm(PAL.BOX, 0.92), wood: gm(PAL.WOOD, 0.9), orange: gm(PAL.ORANGE, 0.8), seam: gm(PAL.SEAM, 0.9), dark: gm([0.03, 0.045, 0.06], 0.85),
-      inner: gm([0.70, 0.66, 0.56], 0.85), gold: gm(PAL.GOLD, 0.8),
+      inner: gm([0.74, 0.65, 0.50], 0.85), seamHi: gm([0.88, 0.79, 0.63], 0.85), band: gm([0.30, 0.20, 0.13], 0.9), gold: gm(PAL.GOLD, 0.8),
       strip: glowM([1.0, 0.97, 0.9], 3.4), stripDim: glowM([1.0, 0.97, 0.9], 1.5), cyan: glowM([0.7, 0.95, 1.0], 1.3),
     };
     const geoBox = own(new THREE.BoxGeometry(1, 1, 1));
@@ -179,15 +201,15 @@ export default {
     const SW = 3.3, sx0 = -0.45, LX = sx0 - SW / 2 - 0.2, RX = sx0 + SW / 2 + 0.2;
     // 벽: 남색 걸레받이·기둥(리브)·윗띠, 크림 판 사이 이음줄
     box(8, 0.13, 0.03, M.navy, 0, 0.065, WZ + 0.015);
-    box(8, 0.05, 0.05, M.navy, 0, 1.72, WZ + 0.025);
+    box(8, 0.05, 0.05, M.navy, 0, 2.12, WZ + 0.025);
     const ribs = [LX - 1.1, LX, RX, RX + 1.1, RX + 2.2];
     for (const x of ribs) {
       box(0.16, 3, 0.09, M.navy, x, 1.5, WZ + 0.045);
       box(0.05, 3, 0.03, M.teal, x, 1.5, WZ + 0.1);
     }
     for (const x0 of [LX - 0.55, RX + 0.55, RX + 1.65]) {          // 가게 양옆 벽 칸
-      for (const y of [0.5, 0.98, 1.46]) box(0.92, 0.008, 0.006, M.seam, x0, y, WZ + 0.004, { cast: false });
-      for (const dx of [-0.22, 0.22]) box(0.008, 1.86, 0.006, M.seam, x0 + dx, 1.06, WZ + 0.004, { cast: false });
+      for (const y of [0.5, 0.98, 1.46, 1.94]) { box(0.92, 0.016, 0.004, M.seam, x0, y, WZ + 0.002, { cast: false }); box(0.92, 0.008, 0.004, M.seamHi, x0, y - 0.012, WZ + 0.002, { cast: false }); }
+      for (const dx of [-0.22, 0.22]) { box(0.016, 2.3, 0.004, M.seam, x0 + dx, 1.28, WZ + 0.002, { cast: false }); box(0.008, 2.3, 0.004, M.seamHi, x0 + dx + 0.012, 1.28, WZ + 0.002, { cast: false }); }
       box(0.5, 0.016, 0.012, M.stripDim, x0, 1.21, WZ + 0.012);           // 벽의 가는 등 (게임 시장 벽처럼 두 줄)
       box(0.5, 0.016, 0.012, M.stripDim, x0, 0.73, WZ + 0.012);
       box(0.6, 0.05, 0.03, M.navy, x0, 1.24, WZ + 0.015); box(0.6, 0.05, 0.03, M.navy, x0, 0.76, WZ + 0.015);
@@ -199,7 +221,7 @@ export default {
     }
 
     // 가게: 남색 테를 두른 안쪽 창구 → 그 앞 계산대(청록 몸통·초록 판·크림 윗판·밑의 긴 등) → 위 차양과 긴 등 → 남색 간판
-    const WT = 1.13;      // 창구 위 테의 높이 (방의 카메라는 뒷벽을 1.6 m 쯤까지만 보므로 게임보다 낮게 눌러 담았다)
+    const WT = 1.45;      // 창구 위 테의 높이 (방의 카메라는 뒷벽을 1.6 m 쯤까지만 보므로 게임보다 낮게 눌러 담았다)
     box(SW - 0.1, WT - 0.58, 0.012, M.inner, sx0, (WT + 0.58) / 2, WZ + 0.006, { cast: false });       // 안쪽(밝은 크림)
     box(SW, 0.07, 0.07, M.navy, sx0, 0.585, WZ + 0.035); box(SW, 0.07, 0.07, M.navy, sx0, WT, WZ + 0.035);
     for (const x of [-SW / 2, SW / 2]) box(0.1, WT + 0.02, 0.09, M.navy, sx0 + x, (WT + 0.02) / 2, WZ + 0.045);
@@ -238,7 +260,7 @@ export default {
     // 가게 옆 나무 상자 더미(게임 시장의 상자들)와 보급 상자
     for (const [x, y, z, s, ry] of [[RX + 0.42, 0.2, -1.2, 0.4, 0.08], [RX + 0.86, 0.2, -1.15, 0.4, -0.12], [RX + 0.6, 0.58, -1.2, 0.36, 0.3]]) {
       const b = box(s, s, s, M.wood, x, y, z, { ry });
-      for (const dy of [-0.42, 0.42]) { const band = new THREE.Mesh(geoBox, M.dark); band.scale.set(1.02, 0.06, 1.02); band.position.y = dy; b.add(band); }
+      for (const dy of [-0.42, 0.42]) { const band = new THREE.Mesh(geoBox, M.band); band.scale.set(1.02, 0.06, 1.02); band.position.y = dy; b.add(band); }
     }
     box(0.3, 0.2, 0.22, labelM, LX - 0.5, 0.1, -1.3, { ry: 0.25 }); box(0.26, 0.16, 0.2, M.box, LX - 0.46, 0.28, -1.31, { ry: -0.1 });
 
@@ -263,19 +285,23 @@ export default {
     const glowMat = (c, op) => { const m = own(new THREE.MeshBasicMaterial({ map: S.tex.glow, transparent: true, opacity: op, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); m.color.setRGB(...c); return m; };
     const glowGeo = own(new THREE.PlaneGeometry(1, 1));
     const glow = (w, h, x, y, z, c, op) => { const p = new THREE.Mesh(glowGeo, glowMat(c, op)); p.scale.set(w, h, 1); p.position.set(x, y, z); p.renderOrder = 5; G.add(p); return p; };
-    glow(SW + 0.1, 0.2, sx0, AY - 0.012, WZ + 0.28, [1.0, 0.97, 0.9], 0.75);
-    glow(SW + 0.1, 0.18, sx0, CH - 0.02, WZ + CD + 0.04, [0.9, 1.0, 0.95], 0.6);
+    glow(SW - 0.1, 0.16, sx0, AY - 0.012, WZ + 0.28, [1.0, 0.97, 0.9], 0.8);
+    glow(SW + 0.5, 0.4, sx0, AY - 0.06, WZ + 0.29, [1.0, 0.95, 0.85], 0.2);
+    glow(SW - 0.1, 0.14, sx0, CH - 0.02, WZ + CD + 0.04, [0.9, 1.0, 0.95], 0.7);
+    glow(SW + 0.4, 0.5, sx0, CH - 0.04, WZ + CD + 0.05, [0.85, 1.0, 0.92], 0.22);
+    for (const x0 of [LX - 0.55, RX + 0.55, RX + 1.65]) for (const y of [1.21, 0.73]) { glow(0.62, 0.1, x0, y, WZ + 0.03, [1.0, 0.97, 0.9], 0.6); glow(0.95, 0.42, x0, y - 0.03, WZ + 0.032, [1.0, 0.95, 0.85], 0.2); }
+    for (const x of [sx0 - 1.0, sx0 + 1.0]) glow(0.75, 0.3, x, WT - 0.1, WZ + 0.04, [1.0, 0.96, 0.88], 0.22);
 
     ctx.room.add(G);
 
     /* 3) 빛: 따뜻한 실내 채움빛은 약하게, 위의 긴 등(그림자) + 가게 차양 등 + 계산대 밑 등 */
-    lights.hemi.color.setRGB(1.0, 0.87, 0.70); lights.hemi.groundColor.setRGB(0.85, 0.74, 0.60); lights.hemi.intensity = 0.31;
-    lights.key.color.setRGB(1.0, 0.97, 0.9); lights.key.intensity = 0.36; lights.key.position.set(0.5, 3.4, 1.5);
-    lights.lamp.color.setRGB(1.0, 0.97, 0.9); lights.lamp.intensity = 0.8;
+    lights.hemi.color.setRGB(1.0, 0.88, 0.72); lights.hemi.groundColor.setRGB(0.80, 0.72, 0.60); lights.hemi.intensity = 0.62;
+    lights.key.color.setRGB(1.0, 0.97, 0.9); lights.key.intensity = 0.22; lights.key.position.set(0.5, 3.4, 1.5);
+    lights.lamp.color.setRGB(1.0, 0.97, 0.9); lights.lamp.intensity = 0.45;
     lights.screen.color.setRGB(0.66, 0.78, 1.0);
     const addLight = (c, i, d, x, y, z) => { const l = new THREE.PointLight(0xffffff, i, d, 1.7); l.color.setRGB(...c); l.position.set(x, y, z); scene.add(l); S.lights.push(l); return l; };
-    S.awning = [addLight([1.0, 0.97, 0.9], 1.7, 3.6, sx0 - 1.0, 1.08, WZ + 0.5), addLight([1.0, 0.97, 0.9], 1.7, 3.6, sx0 + 1.0, 1.08, WZ + 0.5)];
-    addLight([0.8, 1.0, 0.92], 0.5, 2.2, sx0, 0.42, WZ + CD + 0.25);
+    S.awning = [addLight([1.0, 0.97, 0.9], 0.5, 3.6, sx0 - 1.0, WT - 0.05, WZ + 0.6), addLight([1.0, 0.97, 0.9], 0.5, 3.6, sx0 + 1.0, WT - 0.05, WZ + 0.6)];
+    addLight([0.8, 1.0, 0.92], 0.3, 2.2, sx0, 0.42, WZ + CD + 0.25);
 
     /* 4) 공기·필름 */
     scene.background = new THREE.Color().setRGB(0.004, 0.005, 0.02, THREE.SRGBColorSpace);
@@ -284,7 +310,7 @@ export default {
     renderer.toneMappingExposure = 1;
     // 게임이 주인공에게만 비추는 약한 보조등
     S.hero = ctx.chars.shoreline?.debug?.U || null;
-    if (S.hero) S.hero.uFill.value = 0.035;
+    if (S.hero) S.hero.uFill.value = 0.06;
   },
 
   exit(ctx) {
@@ -305,6 +331,6 @@ export default {
 
   update(ctx, dt, t) {
     // 긴 등이 아주 조금 떨린다(낡은 정거장의 형광등)
-    if (S.awning) { const f = 1 + 0.025 * Math.sin(t * 13.7) * Math.sin(t * 2.3); S.awning[0].intensity = 1.7 * f; S.awning[1].intensity = 1.7 * f; }
+    if (S.awning) { const f = 1 + 0.025 * Math.sin(t * 13.7) * Math.sin(t * 2.3); S.awning[0].intensity = 0.5 * f; S.awning[1].intensity = 0.5 * f; }
   },
 };
