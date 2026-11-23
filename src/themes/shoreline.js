@@ -9,7 +9,7 @@
 const PAL = {
   CREAM: [0.80, 0.77, 0.68], PALE: [0.66, 0.68, 0.64], GREEN: [0.18, 0.44, 0.37], NAVY: [0.10, 0.15, 0.20],
   ORANGE: [0.88, 0.45, 0.12], GOLD: [0.78, 0.60, 0.26],
-  TEAL: [0.07, 0.20, 0.19], PANEL: [0.22, 0.44, 0.36], BOX: [0.72, 0.60, 0.42], WOOD: [0.50, 0.33, 0.20], SEAM: [0.68, 0.60, 0.46],
+  TEAL: [0.07, 0.20, 0.19], PANEL: [0.22, 0.44, 0.36], BOX: [0.72, 0.60, 0.42], WOOD: [0.50, 0.33, 0.20], SEAM: [0.52, 0.45, 0.33],
 };
 
 /* ── 게임의 칠 느낌을 three.js 표준 재질에 얹는다 (직접 빛 계산만 바꿈) ── */
@@ -49,15 +49,16 @@ float gGrain() {
   return 1.0 + GRAIN_FINE * fine + GRAIN_FINE * 0.8 * mid + GRAIN_BLOT * blot;
 }
 `;
-function gamePatch(sh) {
+const mkPatch = (fine, blot) => sh => {
   sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vGrainPos;')
     .replace('#include <project_vertex>', '#include <project_vertex>\nvGrainPos = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
-  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n#define GRAIN_FINE 0.34\n#define GRAIN_BLOT 0.09\n' + GRAIN_PARS)
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\n#define GRAIN_FINE ' + fine.toFixed(3) + '\n#define GRAIN_BLOT ' + blot.toFixed(3) + '\n' + GRAIN_PARS)
     .replace('#include <map_fragment>', '#include <map_fragment>\ndiffuseColor.rgb *= gGrain();')
     .replace('#include <lights_physical_pars_fragment>', '#include <lights_physical_pars_fragment>\n' + GAME_LIGHT);
-}
-const gameKey = () => 'shoreline-station-paint-2';
-function styleOn(m) { m.onBeforeCompile = gamePatch; m.customProgramCacheKey = gameKey; m.needsUpdate = true; }
+};
+const gamePatch = mkPatch(0.03, 0.0), floorPatch = mkPatch(0.16, 0.05);     // 벽·상자·가구는 매끈하게, 바닥(고무 갑판)만 고운 알갱이
+const gameKey = () => 'shoreline-station-paint-3', floorKey = () => 'shoreline-station-floor-3';
+function styleOn(m, floor) { m.onBeforeCompile = floor ? floorPatch : gamePatch; m.customProgramCacheKey = floor ? floorKey : gameKey; m.needsUpdate = true; }
 function styleOff(m) { delete m.onBeforeCompile; delete m.customProgramCacheKey; m.needsUpdate = true; }
 
 /* ── 화면 전체 후처리: AgX(노출 1.2) → 대비·채도 → 모서리 어둡게·알갱이 ── */
@@ -169,9 +170,9 @@ export default {
       const m = mats[k]; if (!m || !m.isMeshStandardMaterial) continue;
       m.color.copy(snap(THREE, m.color)); m.metalness = Math.min(m.metalness, 0.12); m.roughness = Math.max(m.roughness, 0.72);
     }
-    col(mats.floor, [0.23, 0.41, 0.36], 0.88); mats.floor.map = S.tex.floor;      // 바닥은 초록 갑판
-    col(mats.wall, [0.82, 0.73, 0.57], 0.8); mats.wall.map = S.tex.wall;                   // 벽은 크림 판
-    for (const k of ['floor', 'wall', 'ceiling', 'table', 'tableLeg', 'cushionA', 'cushionB', 'laptopBody', 'laptopDark', 'keycap', 'mouseBody', 'cable']) { styleOn(mats[k]); S.styled.push(mats[k]); }
+    col(mats.floor, [0.20, 0.41, 0.345], 0.88);      // 바닥은 초록 갑판
+    col(mats.wall, [0.82, 0.73, 0.57], 0.8);                   // 벽은 크림 판
+    for (const k of ['floor', 'wall', 'ceiling', 'table', 'tableLeg', 'cushionA', 'cushionB', 'laptopBody', 'laptopDark', 'keycap', 'mouseBody', 'cable']) { styleOn(mats[k], k === 'floor'); S.styled.push(mats[k]); }
     mats.floor.needsUpdate = mats.wall.needsUpdate = true;
     parts.decor.visible = false; parts.rug.visible = false; parts.rugRing.visible = false;
     // 바깥에서 온 노트북 모델(있다면)도 같은 팔레트로 눌러 준다
@@ -188,10 +189,10 @@ export default {
     const gm = (c, rough = 0.82, extra = {}) => { const m = own(new THREE.MeshStandardMaterial({ roughness: rough, metalness: 0, ...extra })); m.color.setRGB(c[0], c[1], c[2], THREE.SRGBColorSpace); m.onBeforeCompile = gamePatch; m.customProgramCacheKey = gameKey; return m; };
     const glowM = (c, k) => { const m = own(new THREE.MeshBasicMaterial()); m.color.setRGB(c[0] * k, c[1] * k, c[2] * k); return m; };
     const M = {
-      navy: gm(PAL.NAVY), teal: gm(PAL.TEAL), cream: gm(PAL.CREAM, 0.8), pale: gm(PAL.PALE, 0.78), green: gm(PAL.PANEL, 0.74), deck: gm([0.11, 0.30, 0.25], 0.9),
+      navy: gm([0.14, 0.20, 0.24]), teal: gm(PAL.TEAL), rib: gm([0.17, 0.27, 0.25]), beam: gm([0.19, 0.36, 0.30]), glass: gm([0.20, 0.27, 0.29], 0.75), white: gm([0.88, 0.88, 0.84], 0.78), cream: gm(PAL.CREAM, 0.8), pale: gm(PAL.PALE, 0.78), green: gm(PAL.PANEL, 0.74), deck: gm([0.11, 0.30, 0.25], 0.9),
       box: gm(PAL.BOX, 0.92), wood: gm(PAL.WOOD, 0.9), orange: gm(PAL.ORANGE, 0.8), seam: gm(PAL.SEAM, 0.9), dark: gm([0.03, 0.045, 0.06], 0.85),
       inner: gm([0.74, 0.65, 0.50], 0.85), seamHi: gm([0.88, 0.79, 0.63], 0.85), band: gm([0.30, 0.20, 0.13], 0.9), gold: gm(PAL.GOLD, 0.8),
-      strip: glowM([1.0, 0.97, 0.9], 3.4), stripDim: glowM([1.0, 0.97, 0.9], 1.5), cyan: glowM([0.7, 0.95, 1.0], 1.3),
+      strip: glowM([1.0, 0.97, 0.9], 3.4), stripDim: glowM([1.0, 0.98, 0.94], 3.0), cyan: glowM([0.7, 0.95, 1.0], 1.3),
     };
     const geoBox = own(new THREE.BoxGeometry(1, 1, 1));
     const box = (w, h, d, m, x, y, z, o = {}) => { const b = new THREE.Mesh(geoBox, m); b.scale.set(w, h, d); b.position.set(x, y, z); if (o.rx) b.rotation.x = o.rx; if (o.ry) b.rotation.y = o.ry; if (o.rz) b.rotation.z = o.rz; b.castShadow = o.cast !== false && !m.isMeshBasicMaterial; b.receiveShadow = !m.isMeshBasicMaterial; G.add(b); return b; };
@@ -199,20 +200,19 @@ export default {
 
     // 가게는 방 가운데에서 조금 왼쪽(탐험가가 일어서는 쪽)에 둔다: 게임 화면처럼 간판 밑에 그녀가 선다
     const SW = 3.3, sx0 = -0.45, LX = sx0 - SW / 2 - 0.2, RX = sx0 + SW / 2 + 0.2;
-    // 벽: 남색 걸레받이·기둥(리브)·윗띠, 크림 판 사이 이음줄
-    box(8, 0.13, 0.03, M.navy, 0, 0.065, WZ + 0.015);
-    box(8, 0.05, 0.05, M.navy, 0, 2.12, WZ + 0.025);
-    const ribs = [LX - 1.1, LX, RX, RX + 1.1, RX + 2.2];
-    for (const x of ribs) {
-      box(0.16, 3, 0.09, M.navy, x, 1.5, WZ + 0.045);
-      box(0.05, 3, 0.03, M.teal, x, 1.5, WZ + 0.1);
-    }
-    for (const x0 of [LX - 0.55, RX + 0.55, RX + 1.65]) {          // 가게 양옆 벽 칸
-      for (const y of [0.5, 0.98, 1.46, 1.94]) { box(0.92, 0.016, 0.004, M.seam, x0, y, WZ + 0.002, { cast: false }); box(0.92, 0.008, 0.004, M.seamHi, x0, y - 0.012, WZ + 0.002, { cast: false }); }
-      for (const dx of [-0.22, 0.22]) { box(0.016, 2.3, 0.004, M.seam, x0 + dx, 1.28, WZ + 0.002, { cast: false }); box(0.008, 2.3, 0.004, M.seamHi, x0 + dx + 0.012, 1.28, WZ + 0.002, { cast: false }); }
-      box(0.5, 0.016, 0.012, M.stripDim, x0, 1.21, WZ + 0.012);           // 벽의 가는 등 (게임 시장 벽처럼 두 줄)
-      box(0.5, 0.016, 0.012, M.stripDim, x0, 0.73, WZ + 0.012);
-      box(0.6, 0.05, 0.03, M.navy, x0, 1.24, WZ + 0.015); box(0.6, 0.05, 0.03, M.navy, x0, 0.76, WZ + 0.015);
+    // 벽: 매끈한 크림 판을 이어 붙인 벽(또렷한 세로 이음줄), 가는 청록 기둥, 위에는 초록 들보와 그 밑의 흰 긴 등
+    box(8, 0.11, 0.03, M.rib, 0, 0.055, WZ + 0.015);
+    box(8, 0.13, 0.1, M.beam, 0, 2.14, WZ + 0.05);
+    box(7.7, 0.02, 0.02, M.strip, 0, 2.065, WZ + 0.085);
+    for (const x of [LX - 1.1, LX, RX, RX + 1.1, RX + 2.2]) box(0.075, 3, 0.06, M.rib, x, 1.5, WZ + 0.03);
+    const BAYS = [LX - 0.55, RX + 0.55, RX + 1.65];
+    for (const x0 of BAYS) {                                         // 가게 양옆 벽 칸
+      for (const dx of [-0.26, 0.26]) box(0.006, 2.0, 0.004, M.seam, x0 + dx, 1.08, WZ + 0.002, { cast: false });
+      box(0.95, 0.006, 0.004, M.seam, x0, 0.5, WZ + 0.002, { cast: false });
+      // 어두운 화면/창 판(남색 테 안으로 들어간 판)과 그 밑의 흰 등
+      box(0.74, 0.5, 0.03, M.navy, x0, 1.6, WZ + 0.015); box(0.66, 0.42, 0.012, M.glass, x0, 1.6, WZ + 0.032, { cast: false });
+      box(0.7, 0.03, 0.05, M.white, x0, 1.3, WZ + 0.025); box(0.62, 0.016, 0.012, M.stripDim, x0, 1.278, WZ + 0.05);
+      box(0.7, 0.03, 0.05, M.white, x0, 0.76, WZ + 0.025); box(0.62, 0.016, 0.012, M.stripDim, x0, 0.738, WZ + 0.05);
     }
     // 옆벽에도 같은 기둥과 걸레받이(가까이 당겨 보면 보인다)
     for (const sx of [-1, 1]) {
@@ -237,7 +237,8 @@ export default {
       box(pw - 0.07, 0.29, 0.012, M.green, x, 0.25, WZ + CD + 0.004);
       for (const [dx, dy] of [[-1, 1], [1, 1], [-1, -1], [1, -1]]) box(0.05, 0.05, 0.014, M.teal, x + dx * (pw - 0.07) / 2, 0.25 + dy * 0.145, WZ + CD + 0.005, { rz: Math.PI / 4, cast: false });
     }
-    box(SW + 0.06, 0.035, CD + 0.1, M.cream, sx0, CH + 0.0175, cz + 0.04);                            // 윗판
+    box(SW + 0.06, 0.035, CD + 0.1, M.white, sx0, CH + 0.0175, cz + 0.04);
+    box(SW - 0.2, 0.03, 0.06, M.white, sx0, 0.64, WZ + 0.07); box(SW - 0.4, 0.012, 0.012, M.stripDim, sx0, 0.62, WZ + 0.1);                            // 윗판
     box(SW - 0.2, 0.016, 0.014, M.strip, sx0, CH - 0.02, WZ + CD + 0.022);                            // 윗판 밑 긴 등
     // 계산대 위 종이 상자(주황 띠)
     const labelM = own(new THREE.MeshStandardMaterial({ map: S.tex.label, roughness: 0.92 })); labelM.onBeforeCompile = gamePatch; labelM.customProgramCacheKey = gameKey;
@@ -289,13 +290,14 @@ export default {
     glow(SW + 0.5, 0.4, sx0, AY - 0.06, WZ + 0.29, [1.0, 0.95, 0.85], 0.2);
     glow(SW - 0.1, 0.14, sx0, CH - 0.02, WZ + CD + 0.04, [0.9, 1.0, 0.95], 0.7);
     glow(SW + 0.4, 0.5, sx0, CH - 0.04, WZ + CD + 0.05, [0.85, 1.0, 0.92], 0.22);
-    for (const x0 of [LX - 0.55, RX + 0.55, RX + 1.65]) for (const y of [1.21, 0.73]) { glow(0.62, 0.1, x0, y, WZ + 0.03, [1.0, 0.97, 0.9], 0.6); glow(0.95, 0.42, x0, y - 0.03, WZ + 0.032, [1.0, 0.95, 0.85], 0.2); }
+    for (const x0 of BAYS) for (const y of [1.278, 0.738]) { glow(0.74, 0.09, x0, y, WZ + 0.06, [1.0, 0.97, 0.9], 0.6); glow(1.0, 0.36, x0, y - 0.03, WZ + 0.062, [1.0, 0.95, 0.85], 0.16); }
+    glow(8.0, 0.1, 0, 2.065, WZ + 0.1, [1.0, 0.97, 0.9], 0.5);
     for (const x of [sx0 - 1.0, sx0 + 1.0]) glow(0.75, 0.3, x, WT - 0.1, WZ + 0.04, [1.0, 0.96, 0.88], 0.22);
 
     ctx.room.add(G);
 
     /* 3) 빛: 따뜻한 실내 채움빛은 약하게, 위의 긴 등(그림자) + 가게 차양 등 + 계산대 밑 등 */
-    lights.hemi.color.setRGB(1.0, 0.88, 0.72); lights.hemi.groundColor.setRGB(0.80, 0.72, 0.60); lights.hemi.intensity = 0.62;
+    lights.hemi.color.setRGB(1.0, 0.88, 0.72); lights.hemi.groundColor.setRGB(0.80, 0.72, 0.60); lights.hemi.intensity = 0.54;
     lights.key.color.setRGB(1.0, 0.97, 0.9); lights.key.intensity = 0.22; lights.key.position.set(0.5, 3.4, 1.5);
     lights.lamp.color.setRGB(1.0, 0.97, 0.9); lights.lamp.intensity = 0.45;
     lights.screen.color.setRGB(0.66, 0.78, 1.0);
@@ -310,7 +312,7 @@ export default {
     renderer.toneMappingExposure = 1;
     // 게임이 주인공에게만 비추는 약한 보조등
     S.hero = ctx.chars.shoreline?.debug?.U || null;
-    if (S.hero) S.hero.uFill.value = 0.06;
+    if (S.hero) S.hero.uFill.value = 0.17;
   },
 
   exit(ctx) {
