@@ -1,0 +1,78 @@
+펭귄 횡단 — 효과음 크레딧
+=========================
+
+녹음 음원: Kenney (www.kenney.nl) 의 CC0 팩 3종 — 아래 목록.
+CC0 1.0: https://creativecommons.org/publicdomain/zero/1.0/  (상업 이용 가능, 표기 의무 없음)
+
+나머지 소리(눈 퍼담기, 카드, 캔 따기, 꿀꺽, 씹기, 금전등록기 벨, 컨베이어, 돌풍,
+바람·헬기·엔진 루프, 바다 에디션의 풍덩·뽀글·물속 루프, pop/hop/powerup/fanfare)는 게임플레이_코드/사운드_효과음.gd 가 실행 시 합성합니다
+(이 프로젝트를 위해 작성한 코드. 제3자 라이선스 없음).
+금전등록기(cash)는 합성 벨 위에 녹음된 동전 소리(coins)를 겹쳐 냅니다.
+
+외부 음원 넣는 법
+-----------------
+이 폴더에 아래 이름으로 .ogg / .wav / .mp3 를 넣으면 합성음 대신 그 파일을 씁니다.
+같은 소리의 변주는 이름 뒤에 _1, _2 ... 를 붙이면 됩니다 (예: scoop_1.ogg, scoop_2.ogg).
+재생할 때마다 무작위로 하나를 고르고 피치·볼륨을 살짝 흔듭니다.
+wind / heli / engine / underwater 는 import 설정과 상관없이 루프가 강제로 켜집니다.
+
+  step0~2   보통 눈 발자국        deep0~2   깊은 눈 발자국
+  scoop     눈 퍼담기             thud      착지·쿵
+  click     큰 버튼 누르기        card      카드 리더기에 카드 꽂기
+  canopen   캔 따기               gulp      꿀꺽 마시기
+  chew      고기 씹기             cloth     털옷 입기
+  cash      금전등록기·지급       conveyor  판매기 컨베이어
+  stamp     엔딩 등급 도장        gust      눈보라 시작 돌풍
+  wind      바람 (루프)           heli      헬기 (루프)
+  engine    버기 엔진 (루프)
+  splash    물에 풍덩·폴짝        bubble    수면 통과 뽀글
+  underwater 물속 웅웅 (루프)
+  UI 음:    pop pocket hop beep tick buzz powerup fanfare
+
+외부 음원을 추가할 때는 아래 형식으로 한 줄씩 기록하세요.
+상업 이용 가능 라이선스(CC0 권장)만 사용합니다.
+
+  파일명 | 원본 이름 | 작성자 | 출처 URL | 라이선스 | 수정 사항
+
+추가된 외부 음원
+----------------
+발걸음0.ogg | footstep_snow_000.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+발걸음1.ogg | footstep_snow_001.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+발걸음2.ogg | footstep_snow_002.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+발걸음0_1.ogg | footstep_snow_003.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+발걸음1_1.ogg | footstep_snow_004.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+깊은눈0.ogg | impactSoft_heavy_000.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+깊은눈1.ogg | impactSoft_heavy_001.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+깊은눈2.ogg | impactSoft_heavy_002.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+깊은눈0_1.ogg | impactSoft_heavy_003.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+깊은눈1_1.ogg | impactSoft_heavy_004.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+쿵.ogg | impactSoft_medium_000.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+쿵_1.ogg | impactSoft_medium_001.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+쿵_2.ogg | impactSoft_medium_002.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+쿵_3.ogg | impactSoft_medium_003.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+쿵_4.ogg | impactSoft_medium_004.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+도장.ogg | impactPunch_heavy_000.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+도장_1.ogg | impactPunch_heavy_001.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+도장_2.ogg | impactPunch_heavy_002.ogg | Kenney (Impact Sounds 1.0) | https://kenney.nl/assets/impact-sounds | CC0 1.0 | 이름만 변경
+옷감.ogg | cloth1.ogg | Kenney (RPG Audio 1.0) | https://kenney.nl/assets/rpg-audio | CC0 1.0 | 이름만 변경
+옷감_1.ogg | cloth2.ogg | Kenney (RPG Audio 1.0) | https://kenney.nl/assets/rpg-audio | CC0 1.0 | 이름만 변경
+옷감_2.ogg | cloth3.ogg | Kenney (RPG Audio 1.0) | https://kenney.nl/assets/rpg-audio | CC0 1.0 | 이름만 변경
+옷감_3.ogg | cloth4.ogg | Kenney (RPG Audio 1.0) | https://kenney.nl/assets/rpg-audio | CC0 1.0 | 이름만 변경
+동전.ogg | handleCoins.ogg | Kenney (RPG Audio 1.0) | https://kenney.nl/assets/rpg-audio | CC0 1.0 | 이름만 변경
+동전_1.ogg | handleCoins2.ogg | Kenney (RPG Audio 1.0) | https://kenney.nl/assets/rpg-audio | CC0 1.0 | 이름만 변경
+딸깍.ogg | switch_001.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+딸깍_1.ogg | switch_002.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+딸깍_2.ogg | switch_003.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+딸깍_3.ogg | switch_004.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+삑.ogg | confirmation_001.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+삑_1.ogg | confirmation_002.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+삑_2.ogg | confirmation_003.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+삑_3.ogg | confirmation_004.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+주머니.ogg | drop_001.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+주머니_1.ogg | drop_002.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+주머니_2.ogg | drop_003.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+주머니_3.ogg | drop_004.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+버저.ogg | error_001.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+버저_1.ogg | error_002.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+똑딱.ogg | tick_001.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
+똑딱_1.ogg | tick_002.ogg | Kenney (Interface Sounds) | https://kenney.nl/assets/interface-sounds | CC0 1.0 | 이름만 변경
