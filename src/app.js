@@ -455,8 +455,8 @@ function initWebPlayer() {
 let openPick = () => {};
 function setupPick(goFn) {
   const pick = $('#pickBox'), pickIn = $('#pickInput');
-  const close = () => { pick.hidden = true; ANDROID?.hide(false); };
-  openPick = () => { pick.hidden = false; ANDROID?.hide(true); pickIn.value = ''; pickIn.focus(); };
+  const close = () => { pick.hidden = true; ANDROID?.hide(false); sendBlocks(); };
+  openPick = () => { pick.hidden = false; ANDROID?.hide(true); sendBlocks(); pickIn.value = ''; pickIn.focus(); };
   $('#pickBtn').hidden = false;
   $('#pickBtn').addEventListener('click', openPick);
   $('#pickClose').addEventListener('click', close);
@@ -488,13 +488,24 @@ function initAndroid() {
   dollyTarget = dolly = 0.9;
   ANDROID.ready(PROBE);
 }
-let lastQuad = '';
+let lastQuad = '', lastBlocks = '';
+function sendBlocks() {
+  if (!ANDROID) return;
+  const r = devicePixelRatio, out = [];
+  for (const el of document.querySelectorAll('.hud, .controls, #pickBox')) {
+    if (el.hidden) continue;
+    const b = el.getBoundingClientRect(); out.push([b.left * r, b.top * r, b.right * r, b.bottom * r].map(v => v.toFixed(0)).join(','));
+  }
+  const q = out.join(';');
+  if (q !== lastBlocks) { lastBlocks = q; ANDROID.blocks(q); }
+}
 function sendQuad() {
   if (!ANDROID || !H) return;
   const r = devicePixelRatio, out = [];
   for (const [x, y] of [[0, BAR_H], [WRAP_W, BAR_H], [WRAP_W, WRAP_H], [0, WRAP_H]]) { const [u, v] = apply3(H, x, y); out.push((u * r).toFixed(1), (v * r).toFixed(1)); }
   const q = WRAP_W + 'x' + WRAP_H + ':' + out.join(',');
   if (q !== lastQuad) { lastQuad = q; ANDROID.quad(q.split(':')[1]); }
+  sendBlocks();
 }
 
 function webGo(raw) {
@@ -760,7 +771,14 @@ function frame() {
 
 /* ───────── 시작 ───────── */
 resetLook(); resize(); placeCamera(); updateCable(); applyScreenLayout();
-if (PHONE_MODE) { $('#rotBtn').hidden = false; $('#rotBtn').addEventListener('click', () => setLandscape(!landscape)); }
+if (PHONE_MODE) {
+  // 진짜 폰을 돌리면 앱 전체가 세로/가로로 바뀌고, 탁자 위 폰도 따라 돈다. 버튼으로도 돌릴 수 있다.
+  const orient = matchMedia('(orientation: landscape)');
+  landscape = orient.matches; rollTarget = phoneRoll.rotation.z = landscape ? -Math.PI / 2 : 0; applyScreenLayout();
+  $('#rotBtn').textContent = landscape ? '↻ 세로로' : '↻ 가로로';
+  orient.addEventListener('change', e => setLandscape(e.matches));
+  $('#rotBtn').hidden = false; $('#rotBtn').addEventListener('click', () => setLandscape(!landscape));
+}
 await loadCharacters(ctx);
 await loadThemes();
 if (IS_APP) initBrowser(); else if (ANDROID) initAndroid(); else initWebPlayer();

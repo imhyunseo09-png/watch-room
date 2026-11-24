@@ -46,6 +46,8 @@ public class MainActivity extends Activity {
     boolean quadReady = false, gameReady = false, hidden = false;
     String probe = null, pendingUrl = null;
     int ytW, ytH;
+    float[][] blocks = new float[0][];   // 게임 화면의 버튼 줄(위·아래·영상 고르기 창): 여기는 늘 게임이 받는다
+    int retries = 0;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -100,6 +102,14 @@ public class MainActivity extends Activity {
                 return !("http".equals(s) || "https".equals(s));   // intent:// 같은 '앱으로 열기'는 무시
             }
             @Override public void doUpdateVisitedHistory(WebView v, String url, boolean reload) { sendUrl(url); }
+            // 인터넷이 잠깐 끊겨 못 열었으면 몇 초 뒤 다시 시도한다
+            @Override public void onReceivedError(WebView v, WebResourceRequest r, android.webkit.WebResourceError e) {
+                if (!r.isForMainFrame() || retries >= 6) return;
+                retries++;
+                final String u = r.getUrl().toString();
+                ui.postDelayed(() -> yt.loadUrl(u), 2500L * retries);
+            }
+            @Override public void onPageFinished(WebView v, String url) { retries = 0; }
         });
         yt.setWebChromeClient(new WebChromeClient());   // 전체화면은 만들지 않음 → 영상은 노트북 화면 안에서만
         yt.setBackgroundColor(Color.parseColor("#0f0f0f"));
@@ -187,6 +197,12 @@ public class MainActivity extends Activity {
                 yt.setVisibility(hidden ? View.INVISIBLE : View.VISIBLE);
             });
         }
+        @JavascriptInterface public void blocks(String csv) {
+            String[] parts = csv.isEmpty() ? new String[0] : csv.split(";");
+            float[][] b = new float[parts.length][];
+            for (int i = 0; i < parts.length; i++) { String[] p = parts[i].split(","); b[i] = new float[4]; for (int k = 0; k < 4; k++) b[i][k] = Float.parseFloat(p[k]); }
+            ui.post(() -> blocks = b);
+        }
         @JavascriptInterface public void hide(boolean h) { ui.post(() -> { hidden = h; yt.setVisibility(h || !quadReady ? View.INVISIBLE : View.VISIBLE); }); }
         // 화면 속 유튜브의 크기(CSS px). 폰을 세로/가로로 돌릴 때 바뀐다
         @JavascriptInterface public void size(int w, int h) {
@@ -209,6 +225,7 @@ public class MainActivity extends Activity {
 
         boolean onScreen(float x, float y) {
             if (!quadReady || yt.getVisibility() != View.VISIBLE) return false;
+            for (float[] b : blocks) if (x >= b[0] && x <= b[2] && y >= b[1] && y <= b[3]) return false;
             pt[0] = x; pt[1] = y; toYt.mapPoints(pt);
             return pt[0] >= 0 && pt[0] <= ytW && pt[1] >= 0 && pt[1] <= ytH;
         }

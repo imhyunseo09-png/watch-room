@@ -93,7 +93,6 @@ body.web #urlInput{font-size:22px;height:32px}
 #ytEmpty p{margin:0}#ytEmpty p b{color:#ff6b62}
 #ytEmpty a{color:#7cc4ff}
 #ytHost.on #ytEmpty{display:none}
-#rotate{display:none}
 body.android #pasteBtn,body.android #cursor{display:none!important}
 body.android #screenWrap{cursor:auto}
 body.android #bar button,body.android #urlInput{cursor:pointer}
@@ -109,10 +108,6 @@ body.android #bar button,body.android #urlInput{cursor:pointer}
 #pickForm .row{display:flex;gap:8px}
 #pickForm .row button{flex:1;height:42px;border-radius:12px;border:0;background:#3a3360;font-size:15px}
 #pickForm .row button[type=submit]{background:#ff4e45;color:#fff}
-@media (pointer:coarse) and (orientation:portrait){
-  #rotate{display:flex;position:fixed;inset:0;z-index:100;background:#1c1730;flex-direction:column;align-items:center;justify-content:center;gap:14px;font-size:18px;text-align:center;padding:24px}
-  #rotate b{font-size:56px;line-height:1}
-}
 /* 폰 가로 화면처럼 낮은 화면 */
 @media (max-height:520px){
   .hud{padding:6px 10px;padding-left:max(10px,env(safe-area-inset-left));padding-right:max(10px,env(safe-area-inset-right))}
@@ -133,6 +128,17 @@ body.android #bar button,body.android #urlInput{cursor:pointer}
   .tag{font-size:13px;height:22px}
 }
 @media (max-height:520px) and (max-width:720px){ .chip:not(.status):not(#themeBtn){display:none} }
+/* 폰 세로 화면: 위·아래 줄을 두 줄로 접는다 */
+@media (orientation:portrait) and (max-width:720px){
+  .hud{flex-wrap:wrap;gap:6px;padding:8px 10px}
+  .brand{width:100%;font-size:19px}
+  .status{max-width:60vw}
+  .controls{flex-wrap:wrap;gap:8px;padding:6px 10px 10px}
+  .reacts{order:1;width:100%;justify-content:center}
+  .chat{order:3;flex:1 1 100%}
+  .pickBtn{order:2;flex:1;height:40px;font-size:15px}
+  .hintline{display:none}
+}
 </style>
 </head>
 <body data-phase="idle">
@@ -183,7 +189,6 @@ body.android #bar button,body.android #urlInput{cursor:pointer}
   <input id="pickInput" type="text" placeholder="유튜브 링크 (또는 검색어)" spellcheck="false">
   <div class="row"><button type="button" id="pickPaste">📋 붙여넣기</button><button type="submit">보기</button><button type="button" id="pickClose">닫기</button></div>
 </form></div>
-<div id="rotate"><b>↻</b>폰을 가로로 돌려 주세요</div>
 
 <script type="module" src="src/app.js"></script>
 </body>

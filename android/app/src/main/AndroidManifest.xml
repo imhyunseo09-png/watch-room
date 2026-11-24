@@ -9,7 +9,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:screenOrientation="sensorLandscape"
+            android:screenOrientation="fullSensor"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|keyboard|smallestScreenSize|uiMode"
             android:windowSoftInputMode="adjustNothing"
             android:launchMode="singleTask">
