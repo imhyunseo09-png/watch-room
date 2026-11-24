@@ -30,7 +30,7 @@ const pick = a => a[Math.floor(Math.random() * a.length)];
 /* ───────── 렌더러 · 장면 · 카메라 ───────── */
 const canvas = $('#gl');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, matchMedia('(pointer: coarse)').matches ? 1.5 : 2));  // 폰은 조금 낮춰 가볍게
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -269,6 +269,8 @@ const hideCursor = () => { cursorEl.style.display = 'none'; };
 
 /* ───────── 노트북 속 유튜브 ───────── */
 const urlInput = $('#urlInput');
+const IS_APP = /\bElectron\//.test(navigator.userAgent);   // 데스크톱 앱이면 진짜 유튜브 사이트, 아니면(폰·브라우저) 유튜브 플레이어
+const TOUCH = matchMedia('(pointer: coarse)').matches;
 const YT_URL = /^(https?:\/\/)?([\w-]+\.)*(youtube\.com|youtu\.be)(\/|$)/i;
 let wv = null, wvReady = false, phase = 'idle', title = '', lastVid = null, watched = 0;
 const PROBE = `(() => {
@@ -324,6 +326,9 @@ function applyProbe(s) {
     if (s.id !== lastVid) { lastVid = s.id; friendSay(pick(LINES.start)); }
     title = s.title; p = s.ended ? 'ended' : s.playing ? 'playing' : s.t > 0.2 ? 'paused' : 'idle';
   } else { title = ''; lastVid = null; }
+  setPhase(p);
+}
+function setPhase(p) {
   if (p !== phase) {
     const prev = phase; phase = p; document.body.dataset.phase = p;
     if (p === 'paused') setTimeout(() => { if (phase === 'paused') friendSay(pick(LINES.pause)); }, 1800);
@@ -340,11 +345,134 @@ setInterval(() => {
   $('#watchTime').textContent = String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
 }, 1000);
 
+/* ───────── 폰·브라우저: 노트북 속 유튜브 플레이어 ─────────
+   브라우저에서는 유튜브 사이트 전체를 띄울 수 없어서, 링크를 붙여넣으면 그 영상을 노트북 화면에서 재생한다.
+   폰에서 유튜브 앱의 '공유 → 같이 보는 방'으로 보내도 바로 열린다(manifest share_target). */
+function parseTime(t) {
+  if (!t) return 0;
+  if (/^\d+$/.test(t)) return +t;
+  const m = t.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/);
+  return m ? (+m[1] || 0) * 3600 + (+m[2] || 0) * 60 + (+m[3] || 0) : 0;
+}
+function parseYouTube(input) {
+  const s = (input || '').trim();
+  if (!s) return null;
+  if (/^[\w-]{11}$/.test(s)) return { id: s };
+  const found = s.match(/https?:\/\/\S+|(?:www\.|m\.)?(?:youtube\.com|youtu\.be)\/\S+/i);   // 공유 글 속 링크도 찾는다
+  let u;
+  try { const raw = found ? found[0] : s; u = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw); } catch { return null; }
+  const host = u.hostname.toLowerCase().replace(/^(www\.|m\.|music\.)/, '');
+  let id = null;
+  if (host === 'youtu.be') id = u.pathname.split('/')[1];
+  else if (host === 'youtube.com' || host === 'youtube-nocookie.com') {
+    if (u.pathname === '/watch') id = u.searchParams.get('v');
+    else { const m = u.pathname.match(/^\/(?:shorts|embed|live|v)\/([\w-]{11})/); if (m) id = m[1]; }
+  } else return null;
+  const list = u.searchParams.get('list');
+  const start = parseTime(u.searchParams.get('t') || u.searchParams.get('start'));
+  if (id && /^[\w-]{11}$/.test(id)) return { id, start };
+  if (list && /^[\w-]+$/.test(list)) return { list };
+  return null;
+}
+let yt = { state: 'none', player: null, ready: false, pending: null };
+function initWebPlayer() {
+  document.body.classList.add('web');
+  const host = document.createElement('div'); host.id = 'ytHost';
+  host.innerHTML = `<div id="ytEmpty"><b>무엇을 볼까요?</b>
+    <p>유튜브 앱에서 영상의 <b>공유 → 같이 보는 방</b>을 누르거나,<br>링크를 복사해서 위 칸에 붙여넣어 주세요.</p>
+    <p class="ytFind"></p></div><div id="ytPlayer"></div>`;
+  wrap.insertBefore(host, cursorEl);
+  urlInput.placeholder = '유튜브 링크 붙여넣기 (또는 검색어)';
+  $('#goBtn').textContent = '보기';
+  const paste = document.createElement('button'); paste.type = 'button'; paste.id = 'pasteBtn'; paste.textContent = '붙여넣기';
+  $('#urlForm').insertBefore(paste, $('#goBtn'));
+  paste.addEventListener('click', async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) { urlInput.value = t.trim(); webGo(t); } else toast('복사한 링크가 없어요.'); }
+    catch { toast('붙여넣기를 못 했어요. 칸을 길게 눌러 붙여넣어 주세요.'); }
+  });
+  $('#urlForm').addEventListener('submit', e => { e.preventDefault(); const v = urlInput.value.trim(); if (v) webGo(v); });
+  urlInput.addEventListener('focus', () => urlInput.select());
+  $('#navHome').addEventListener('click', () => {
+    if (yt.ready) yt.player.stopVideo();
+    host.classList.remove('on'); urlInput.value = ''; title = ''; lastVid = null; setPhase('idle');
+  });
+  // 폰에서는 노트북 주소칸이 작아서, 큰 '영상 고르기' 창을 따로 띄운다
+  const pick = $('#pickBox'), pickIn = $('#pickInput');
+  const openPick = () => { pick.hidden = false; pickIn.value = ''; pickIn.focus(); };
+  $('#pickBtn').hidden = false;
+  $('#pickBtn').addEventListener('click', openPick);
+  $('#ytEmpty').addEventListener('click', e => { if (!e.target.closest('a')) openPick(); });
+  $('#pickClose').addEventListener('click', () => { pick.hidden = true; });
+  $('#pickPaste').addEventListener('click', async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) { pick.hidden = true; webGo(t); } else toast('복사한 링크가 없어요.'); }
+    catch { toast('붙여넣기를 못 했어요. 칸을 길게 눌러 붙여넣어 주세요.'); }
+  });
+  $('#pickForm').addEventListener('submit', e => { e.preventDefault(); const v = pickIn.value.trim(); if (v) { pick.hidden = true; webGo(v); } });
+  if (TOUCH) dollyTarget = dolly = 0.85;
+  const q = new URLSearchParams(location.search);
+  const first = q.get('url') || q.get('text') || q.get('title');
+  if (first) { history.replaceState(null, '', location.pathname); webGo(first); }
+}
+function webGo(raw) {
+  urlInput.blur();
+  const v = parseYouTube(raw);
+  const find = $('#ytHost .ytFind');
+  if (!v) {
+    $('#ytHost').classList.remove('on');
+    find.innerHTML = '';
+    const a = document.createElement('a'); a.target = '_blank'; a.rel = 'noopener';
+    a.href = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(raw);
+    a.textContent = `유튜브에서 “${raw}” 찾아보기 ↗`;
+    find.append(a, document.createElement('br'), '마음에 드는 영상의 공유 → 같이 보는 방, 또는 링크 복사 후 붙여넣기');
+    return;
+  }
+  find.textContent = '';
+  $('#ytHost').classList.add('on');
+  urlInput.value = v.id ? 'youtu.be/' + v.id : 'youtube.com/playlist?list=' + v.list;
+  if (yt.state !== 'ready') { yt.pending = v; loadYtApi(); return; }
+  if (!yt.player) makePlayer(v); else if (!yt.ready) yt.pending = v; else loadInto(v);
+}
+function loadYtApi() {
+  if (yt.state === 'loading' || yt.state === 'ready') return;
+  yt.state = 'loading';
+  window.onYouTubeIframeAPIReady = () => { yt.state = 'ready'; const v = yt.pending; yt.pending = null; if (v) makePlayer(v); };
+  const s = document.createElement('script'); s.src = 'https://www.youtube.com/iframe_api';
+  s.onerror = () => { yt.state = 'none'; s.remove(); toast('유튜브에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.'); };
+  document.head.appendChild(s);
+}
+function makePlayer(v) {
+  const vars = { autoplay: 1, playsinline: 1, rel: 0, hl: 'ko' };
+  if (location.protocol.startsWith('http')) vars.origin = location.origin;
+  if (v.start) vars.start = v.start;
+  const opts = { width: '100%', height: '100%', playerVars: vars, events: {
+    onReady: () => { yt.ready = true; const p = yt.pending; yt.pending = null; if (p) loadInto(p); else yt.player.playVideo(); },
+    onStateChange: e => {
+      const S = YT.PlayerState, d = yt.player.getVideoData?.() || {};
+      if (d.video_id && d.video_id !== lastVid) { lastVid = d.video_id; friendSay(pick(LINES.start)); }
+      if (d.title) title = d.title;
+      if (e.data === S.PLAYING) setPhase('playing');
+      else if (e.data === S.PAUSED) setPhase('paused');
+      else if (e.data === S.ENDED) setPhase('ended');
+    },
+    onError: e => {
+      toast({ 2: '링크가 올바르지 않은 것 같아요.', 100: '삭제됐거나 비공개인 영상이에요.' }[e.data]
+        || '이 영상은 여기서 재생할 수 없어요. 올린 사람이 막아 뒀을 수 있어요.', 5200);
+      title = ''; setPhase('idle');
+    },
+  } };
+  if (v.id) opts.videoId = v.id; else { vars.listType = 'playlist'; vars.list = v.list; }
+  yt.player = new YT.Player('ytPlayer', opts);
+}
+function loadInto(v) {
+  if (v.id) yt.player.loadVideoById({ videoId: v.id, startSeconds: v.start || 0 });
+  else yt.player.loadPlaylist({ list: v.list, listType: 'playlist' });
+}
+
 /* ───────── 마우스 · 키보드 입력 ───────── */
 function clickMouse(i, down) { mouse3d.userData.down[i] = down; }
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
 addEventListener('pointermove', e => {
-  if (!Hinv) return;
+  if (!Hinv || e.pointerType === 'touch') return;
   const [lx, ly] = apply3(Hinv, e.clientX, e.clientY);
   const inScreen = lx >= 0 && lx <= WRAP_W && ly >= 0 && ly <= WRAP_H;
   if (inScreen) {
@@ -362,6 +490,18 @@ addEventListener('keydown', e => pressKey(e.code, true));
 addEventListener('keyup', e => pressKey(e.code, false));
 addEventListener('blur', () => { for (const k in keys) keys[k].userData.down = false; });
 canvas.addEventListener('wheel', e => { dollyTarget = clamp(dollyTarget - Math.sign(e.deltaY) * 0.12, 0, 1); mouse3d.userData.wheel.rotation.x += Math.sign(e.deltaY) * 0.6; }, { passive: true });
+// 폰: 두 손가락을 벌리면 가까이, 오므리면 멀리
+const touches = new Map(); let pinchD = 0;
+const pinchDist = () => { const [a, b] = [...touches.values()]; return Math.hypot(a.x - b.x, a.y - b.y); };
+canvas.addEventListener('pointerdown', e => { if (e.pointerType !== 'touch') return; touches.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (touches.size === 2) pinchD = pinchDist(); });
+canvas.addEventListener('pointermove', e => {
+  if (!touches.has(e.pointerId)) return;
+  touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+  if (touches.size !== 2) return;
+  const d = pinchDist(); dollyTarget = clamp(dollyTarget + (d - pinchD) / Math.min(innerWidth, innerHeight) * 1.4, 0, 1); pinchD = d;
+});
+for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, e => touches.delete(e.pointerId));
+canvas.style.touchAction = 'none';
 function pickCharacter() {
   ray.setFromCamera(ndc, camera);
   for (const id in chars) if (ray.intersectObject(chars[id].root, true).length) return id;
@@ -537,7 +677,8 @@ function frame() {
 resetLook(); resize(); placeCamera(); updateCable();
 await loadCharacters(ctx);
 await loadThemes();
-initBrowser();
+if (IS_APP) initBrowser(); else initWebPlayer();
+if (TOUCH) $('.hintline').textContent = '친구를 누르면 그 친구의 세계로 바뀌어요 · 두 손가락: 가까이/멀리';
 window.WR = { ctx, setTheme, themes, chars, get dolly() { return dolly; }, set dolly(v) { dollyTarget = dolly = v; } };
 requestAnimationFrame(frame);
 setTimeout(() => friendSay('뭐 볼까? 재밌는 거 골라 줘!'), 1200);

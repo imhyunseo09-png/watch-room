@@ -1,0 +1,38 @@
+# 폰용 웹 앱을 깃헙 페이지에 올린다 (main에 올릴 때마다 자동)
+name: 웹 앱 올리기
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: three.js 받기
+        run: npm ci --omit=dev --ignore-scripts
+      - name: 올릴 파일 모으기
+        run: |
+          mkdir -p _site/node_modules/three
+          cp -r index.html classic.html manifest.webmanifest sw.js src assets icons _site/
+          cp -r node_modules/three/build node_modules/three/examples _site/node_modules/three/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4
