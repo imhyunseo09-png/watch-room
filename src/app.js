@@ -184,6 +184,26 @@ loader.load('assets/laptop.glb', g => {
   parts.laptopModel = m; laptop.add(m);
 }, undefined, () => {});
 
+/* ───────── 폰 (폰 앱·브라우저에서는 노트북 대신 스마트폰이 탁자 위 거치대에 서 있다) ───────── */
+const PHONE_MODE = !/\bElectron\//.test(navigator.userAgent);
+const PH_W = 0.074, PH_H = 0.158, PH_SW = 0.068, PH_SH = 0.148;      // 폰 몸체·화면(m)
+const PHONE_AT = new THREE.Vector3(0, TABLE_Y + 0.1, -0.12);
+const phone = new THREE.Group(); phone.position.copy(PHONE_AT); phone.rotation.x = -0.3; room.add(phone); parts.phone = phone;
+const phoneRoll = new THREE.Group(); phone.add(phoneRoll);                  // 가로로 돌릴 때 이 그룹이 돈다
+box(PH_W, PH_H, 0.008, mats.laptopBody, 0, 0, 0, phoneRoll);
+box(PH_W - 0.004, PH_H - 0.004, 0.002, mats.laptopDark, 0, 0, 0.0035, phoneRoll).castShadow = false;
+const phoneScreen = new THREE.Mesh(new THREE.PlaneGeometry(PH_SW, PH_SH), new THREE.MeshBasicMaterial({ color: '#0f0f0f' }));
+phoneScreen.position.z = 0.0047; phoneRoll.add(phoneScreen);
+const cam = new THREE.Mesh(new THREE.CircleGeometry(0.0035, 12), new THREE.MeshBasicMaterial({ color: '#000' })); cam.position.set(0, PH_H / 2 - 0.008, 0.0048); phoneRoll.add(cam);
+{ // 거치대: 바닥판 + 비스듬한 받침
+  const stand = new THREE.Group(); stand.position.set(0, TABLE_Y, -0.12); phone.parent.add(stand); parts.phoneStand = stand;
+  box(0.07, 0.006, 0.075, mats.laptopDark, 0, 0.003, 0.012, stand);
+  const prop = box(0.05, 0.105, 0.006, mats.laptopDark, 0, 0.052, -0.012, stand); prop.rotation.x = -0.3;
+  box(0.07, 0.008, 0.012, mats.laptopDark, 0, 0.01, 0.036, stand);           // 앞 턱
+}
+let landscape = false, rollTarget = 0;
+phone.visible = PHONE_MODE; laptop.visible = !PHONE_MODE; if (parts.phoneStand) parts.phoneStand.visible = PHONE_MODE;
+
 /* ───────── 유선 마우스 ───────── */
 const mouse3d = new THREE.Group(); room.add(mouse3d); parts.mouse = mouse3d;
 const MOUSE_HOME = new THREE.Vector3(0.52, TABLE_Y, 0.22);
@@ -198,6 +218,7 @@ const MOUSE_HOME = new THREE.Vector3(0.52, TABLE_Y, 0.22);
   mouse3d.userData = { btnL, btnR, wheel, target: MOUSE_HOME.clone(), down: [false, false] };
   mouse3d.position.copy(MOUSE_HOME);
 }
+mouse3d.visible = !PHONE_MODE;
 let cable = null;
 function updateCable() {
   const a = mouse3d.position.clone().add(new THREE.Vector3(0, 0.012, -0.052));
@@ -216,7 +237,9 @@ function moveMouseTo(nx, ny) {
 /* ───────── 카메라 (휠로 가까이/멀리) ───────── */
 let dolly = 0.7, dollyTarget = 0.7;
 const CAM_WIDE = { p: new THREE.Vector3(0, 1.15, 2.4), t: new THREE.Vector3(0, 0.66, -0.15) };
-const CAM_NEAR = { p: new THREE.Vector3(0, 0.7, 0.42), t: new THREE.Vector3(0, 0.555, -0.16) };
+const CAM_NEAR = PHONE_MODE
+  ? { p: new THREE.Vector3(0, 0.49, 0.07), t: new THREE.Vector3(0, PHONE_AT.y - 0.004, PHONE_AT.z) }
+  : { p: new THREE.Vector3(0, 0.7, 0.42), t: new THREE.Vector3(0, 0.555, -0.16) };
 function placeCamera() {
   camera.position.lerpVectors(CAM_WIDE.p, CAM_NEAR.p, dolly);
   camera.lookAt(new THREE.Vector3().lerpVectors(CAM_WIDE.t, CAM_NEAR.t, dolly));
@@ -225,7 +248,30 @@ function placeCamera() {
 
 /* ───────── 노트북 화면 ↔ 진짜 브라우저 맞추기 ───────── */
 const wrap = $('#screenWrap'), cursorEl = $('#cursor');
-const WRAP_W = 1366, WRAP_H = 808, BAR_H = 40;
+let WRAP_W = 1366, WRAP_H = 808; const BAR_H = 40;
+// 지금 쓰는 화면(노트북 / 폰 세로 / 폰 가로): 3D 메시, 크기, CSS 픽셀, 화면 속 내용의 왼위·오른위·오른아래·왼아래가 메시의 어느 모서리인지
+function screenSpec() {
+  if (!PHONE_MODE) return { mesh: screenMesh, w: SCREEN_W, h: SCREEN_H, cw: 1366, ch: 808, order: [[-1, 1], [1, 1], [1, -1], [-1, -1]] };
+  const cw = 412, long = Math.round(cw * PH_SH / PH_SW);
+  return landscape
+    ? { mesh: phoneScreen, w: PH_SW, h: PH_SH, cw: long, ch: cw, order: [[-1, -1], [-1, 1], [1, 1], [1, -1]] }   // 폰을 왼쪽으로 눕힘
+    : { mesh: phoneScreen, w: PH_SW, h: PH_SH, cw, ch: long, order: [[-1, 1], [1, 1], [1, -1], [-1, -1]] };
+}
+function applyScreenLayout() {
+  const s = screenSpec(); WRAP_W = s.cw; WRAP_H = s.ch;
+  wrap.style.width = WRAP_W + 'px'; wrap.style.height = WRAP_H + 'px';
+  for (const el of document.querySelectorAll('#ytHost, #screenWrap webview')) { el.style.width = WRAP_W + 'px'; el.style.height = (WRAP_H - BAR_H) + 'px'; }
+  ANDROID?.size(WRAP_W, WRAP_H - BAR_H);
+}
+let rotT = 0;
+function setLandscape(on) {
+  if (!PHONE_MODE || on === landscape) return;
+  landscape = on; rollTarget = on ? -Math.PI / 2 : 0;
+  wrap.style.visibility = 'hidden'; ANDROID?.hide(true);           // 도는 동안은 화면을 끄고, 다 돌면 켠다
+  applyScreenLayout();
+  $('#rotBtn').textContent = on ? '↻ 세로로' : '↻ 가로로';
+  clearTimeout(rotT); rotT = setTimeout(() => { wrap.style.visibility = ''; ANDROID?.hide(false); }, 480);
+}
 let H = null, Hinv = null, lastCss = '';
 // 네 꼭짓점(화면 픽셀)으로 가는 원근 변환 행렬
 function homography(pts) {
@@ -249,9 +295,9 @@ function inv3(m) {
 const apply3 = (m, x, y) => { const w = m[6] * x + m[7] * y + m[8]; return [(m[0] * x + m[1] * y + m[2]) / w, (m[3] * x + m[4] * y + m[5]) / w]; };
 const corner = new THREE.Vector3();
 function alignScreen() {
-  const hw = SCREEN_W / 2, hh = SCREEN_H / 2, pts = [];
-  for (const [x, y] of [[-hw, hh], [hw, hh], [hw, -hh], [-hw, -hh]]) {
-    corner.set(x, y, 0); screenMesh.localToWorld(corner).project(camera);
+  const sp = screenSpec(), hw = sp.w / 2, hh = sp.h / 2, pts = [];
+  for (const [sx, sy] of sp.order) {
+    corner.set(sx * hw, sy * hh, 0); sp.mesh.localToWorld(corner).project(camera);
     pts.push([(corner.x + 1) / 2 * innerWidth, (1 - corner.y) / 2 * innerHeight]);
   }
   H = homography(pts); Hinv = inv3(H);
@@ -447,8 +493,8 @@ function sendQuad() {
   if (!ANDROID || !H) return;
   const r = devicePixelRatio, out = [];
   for (const [x, y] of [[0, BAR_H], [WRAP_W, BAR_H], [WRAP_W, WRAP_H], [0, WRAP_H]]) { const [u, v] = apply3(H, x, y); out.push((u * r).toFixed(1), (v * r).toFixed(1)); }
-  const q = out.join(',');
-  if (q !== lastQuad) { lastQuad = q; ANDROID.quad(q); }
+  const q = WRAP_W + 'x' + WRAP_H + ':' + out.join(',');
+  if (q !== lastQuad) { lastQuad = q; ANDROID.quad(q.split(':')[1]); }
 }
 
 function webGo(raw) {
@@ -640,7 +686,7 @@ function playAudio(url, { volume = 1 } = {}) {
 }
 const ctx = {
   THREE, scene, camera, renderer, loader, mats, parts, lights, room, chars,
-  anchors: { seats: SEATS, tableY: TABLE_Y, screenCenter: new THREE.Vector3(0, TABLE_Y + 0.2, -0.18) },
+  anchors: { seats: SEATS, tableY: TABLE_Y, screenCenter: PHONE_MODE ? PHONE_AT.clone() : new THREE.Vector3(0, TABLE_Y + 0.2, -0.18) },
   say, subtitle, toast, playAudio, assets: 'assets/',
   get phase() { return phase; }, get themeId() { return themeId; },
 };
@@ -693,6 +739,7 @@ const clock = new THREE.Clock(), lookTarget = new THREE.Vector3();
 function frame() {
   const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime;
   dolly = lerp(dolly, dollyTarget, 1 - Math.exp(-dt * 8));
+  phoneRoll.rotation.z = lerp(phoneRoll.rotation.z, rollTarget, 1 - Math.exp(-dt * 9));
   placeCamera(); alignScreen();
   // 키 · 마우스 움직임
   for (const code in keys) { const k = keys[code]; k.position.y = lerp(k.position.y, k.userData.restY - (k.userData.down ? 0.0035 : 0), 1 - Math.exp(-dt * 40)); }
@@ -712,11 +759,12 @@ function frame() {
 }
 
 /* ───────── 시작 ───────── */
-resetLook(); resize(); placeCamera(); updateCable();
+resetLook(); resize(); placeCamera(); updateCable(); applyScreenLayout();
+if (PHONE_MODE) { $('#rotBtn').hidden = false; $('#rotBtn').addEventListener('click', () => setLandscape(!landscape)); }
 await loadCharacters(ctx);
 await loadThemes();
 if (IS_APP) initBrowser(); else if (ANDROID) initAndroid(); else initWebPlayer();
 if (TOUCH) $('.hintline').textContent = '친구를 누르면 그 친구의 세계로 바뀌어요 · 두 손가락: 가까이/멀리';
-window.WR = { ctx, setTheme, themes, chars, get dolly() { return dolly; }, set dolly(v) { dollyTarget = dolly = v; } };
+window.WR = { ctx, setTheme, themes, chars, setLandscape, get dolly() { return dolly; }, set dolly(v) { dollyTarget = dolly = v; } };
 requestAnimationFrame(frame);
 setTimeout(() => friendSay('뭐 볼까? 재밌는 거 골라 줘!'), 1200);

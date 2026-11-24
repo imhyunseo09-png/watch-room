@@ -28,6 +28,13 @@
 
 폰 버전은 `main`에 올릴 때마다 `.github/workflows/pages.yml`이 깃헙 페이지에 자동으로 올려요.
 
+## 폰 앱 (안드로이드, 진짜 유튜브)
+
+폰 버전은 탁자 위에 노트북 대신 **스마트폰**이 서 있고, 그 화면에 진짜 유튜브가 떠요(검색·추천·로그인).
+- 받기: https://github.com/imhyunseo09-png/watch-room/releases/download/app/watch-room.apk (main에 올릴 때마다 `.github/workflows/android.yml`이 새로 만듦)
+- **↻ 가로로** 버튼을 누르면 폰이 옆으로 돌아가며 유튜브도 가로 화면이 돼요. 두 손가락으로 가까이/멀리.
+- 앱 코드는 `android/`(`MainActivity.java`): 게임 웹페이지 위에 유튜브 브라우저를 띄우고 폰 화면 네 꼭짓점에 맞춰 붙여요.
+
 ## 파일
 
 | 파일 | 하는 일 |

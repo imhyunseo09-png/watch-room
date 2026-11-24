@@ -99,6 +99,7 @@ body.android #screenWrap{cursor:auto}
 body.android #bar button,body.android #urlInput{cursor:pointer}
 .pickBtn{height:46px;padding:0 18px;border-radius:999px;border:0;background:#ff4e45;color:#fff;font-family:var(--font-display);font-size:16px;white-space:nowrap}
 .pickBtn[hidden]{display:none}
+.pickBtn.rot{background:#3a3360}
 #pickBox{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(10,8,24,.55);padding:12px}
 #pickBox[hidden]{display:none}
 #pickForm{width:min(520px,100%);display:flex;flex-direction:column;gap:10px;padding:18px;border-radius:18px;background:#221c3f;border:1px solid rgba(255,255,255,.16);box-shadow:0 12px 40px rgba(0,0,0,.5)}
@@ -165,6 +166,7 @@ body.android #bar button,body.android #urlInput{cursor:pointer}
 <footer class="controls">
   <div class="reacts" id="reacts"></div>
   <button type="button" class="pickBtn" id="pickBtn" hidden>📺 영상 고르기</button>
+  <button type="button" class="pickBtn rot" id="rotBtn" hidden>↻ 가로로</button>
   <form class="chat" id="chatForm" autocomplete="off">
     <input id="chatInput" type="text" maxlength="60" placeholder="친구들에게 한마디">
     <button type="submit">말하기</button>

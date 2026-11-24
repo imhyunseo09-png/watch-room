@@ -43,7 +43,7 @@ public class MainActivity extends Activity {
     RoomLayout room;
     final Handler ui = new Handler(Looper.getMainLooper());
     final Matrix toScreen = new Matrix(), toYt = new Matrix();
-    boolean quadReady = false, gameReady = false;
+    boolean quadReady = false, gameReady = false, hidden = false;
     String probe = null, pendingUrl = null;
     int ytW, ytH;
 
@@ -184,10 +184,21 @@ public class MainActivity extends Activity {
                 toScreen.invert(toYt);
                 yt.setAnimationMatrix(toScreen);
                 quadReady = true;
-                yt.setVisibility(View.VISIBLE);
+                yt.setVisibility(hidden ? View.INVISIBLE : View.VISIBLE);
             });
         }
-        @JavascriptInterface public void hide(boolean hidden) { ui.post(() -> yt.setVisibility(hidden || !quadReady ? View.INVISIBLE : View.VISIBLE)); }
+        @JavascriptInterface public void hide(boolean h) { ui.post(() -> { hidden = h; yt.setVisibility(h || !quadReady ? View.INVISIBLE : View.VISIBLE); }); }
+        // 화면 속 유튜브의 크기(CSS px). 폰을 세로/가로로 돌릴 때 바뀐다
+        @JavascriptInterface public void size(int w, int h) {
+            ui.post(() -> {
+                float d = getResources().getDisplayMetrics().density;
+                int nw = Math.round(w * d), nh = Math.round(h * d);
+                if (nw == ytW && nh == ytH) return;
+                ytW = nw; ytH = nh; quadReady = false;
+                yt.setVisibility(View.INVISIBLE);
+                yt.setLayoutParams(new FrameLayout.LayoutParams(ytW, ytH));
+            });
+        }
     }
 
     /** 손가락이 노트북 화면 안에서 시작하면 그 움직임 전체를 유튜브로, 아니면 게임으로 */
