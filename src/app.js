@@ -257,6 +257,7 @@ function alignScreen() {
   H = homography(pts); Hinv = inv3(H);
   const css = `matrix3d(${H[0]},${H[3]},0,${H[6]},${H[1]},${H[4]},0,${H[7]},0,0,1,0,${H[2]},${H[5]},0,1)`;
   if (css !== lastCss) { wrap.style.transform = css; lastCss = css; }
+  sendQuad();
 }
 // 화면 속 커서: 진짜 커서는 숨기고, 노트북 화면 위에 놓인 커서를 그린다(기울기·크기가 화면을 따라간다)
 function setCursor(x, y, kind) {
@@ -271,6 +272,7 @@ const hideCursor = () => { cursorEl.style.display = 'none'; };
 const urlInput = $('#urlInput');
 const IS_APP = /\bElectron\//.test(navigator.userAgent);   // 데스크톱 앱이면 진짜 유튜브 사이트, 아니면(폰·브라우저) 유튜브 플레이어
 const TOUCH = matchMedia('(pointer: coarse)').matches;
+const ANDROID = window.AndroidRoom || null;   // 안드로이드 앱: 노트북 위에 진짜 유튜브(앱이 따로 띄움)
 const YT_URL = /^(https?:\/\/)?([\w-]+\.)*(youtube\.com|youtu\.be)(\/|$)/i;
 let wv = null, wvReady = false, phase = 'idle', title = '', lastVid = null, watched = 0;
 const PROBE = `(() => {
@@ -396,23 +398,59 @@ function initWebPlayer() {
     if (yt.ready) yt.player.stopVideo();
     host.classList.remove('on'); urlInput.value = ''; title = ''; lastVid = null; setPhase('idle');
   });
-  // 폰에서는 노트북 주소칸이 작아서, 큰 '영상 고르기' 창을 따로 띄운다
-  const pick = $('#pickBox'), pickIn = $('#pickInput');
-  const openPick = () => { pick.hidden = false; pickIn.value = ''; pickIn.focus(); };
-  $('#pickBtn').hidden = false;
-  $('#pickBtn').addEventListener('click', openPick);
+  setupPick(webGo);
   $('#ytEmpty').addEventListener('click', e => { if (!e.target.closest('a')) openPick(); });
-  $('#pickClose').addEventListener('click', () => { pick.hidden = true; });
-  $('#pickPaste').addEventListener('click', async () => {
-    try { const t = await navigator.clipboard.readText(); if (t) { pick.hidden = true; webGo(t); } else toast('복사한 링크가 없어요.'); }
-    catch { toast('붙여넣기를 못 했어요. 칸을 길게 눌러 붙여넣어 주세요.'); }
-  });
-  $('#pickForm').addEventListener('submit', e => { e.preventDefault(); const v = pickIn.value.trim(); if (v) { pick.hidden = true; webGo(v); } });
   if (TOUCH) dollyTarget = dolly = 0.85;
   const q = new URLSearchParams(location.search);
   const first = q.get('url') || q.get('text') || q.get('title');
   if (first) { history.replaceState(null, '', location.pathname); webGo(first); }
 }
+// 폰에서는 노트북 주소칸이 작아서, 큰 '영상 고르기' 창을 따로 띄운다
+let openPick = () => {};
+function setupPick(goFn) {
+  const pick = $('#pickBox'), pickIn = $('#pickInput');
+  const close = () => { pick.hidden = true; ANDROID?.hide(false); };
+  openPick = () => { pick.hidden = false; ANDROID?.hide(true); pickIn.value = ''; pickIn.focus(); };
+  $('#pickBtn').hidden = false;
+  $('#pickBtn').addEventListener('click', openPick);
+  $('#pickClose').addEventListener('click', close);
+  $('#pickPaste').addEventListener('click', async () => {
+    try { const t = await navigator.clipboard.readText(); if (t) { close(); goFn(t); } else toast('복사한 링크가 없어요.'); }
+    catch { toast('붙여넣기를 못 했어요. 칸을 길게 눌러 붙여넣어 주세요.'); }
+  });
+  $('#pickForm').addEventListener('submit', e => { e.preventDefault(); const v = pickIn.value.trim(); if (v) { close(); goFn(v); } });
+}
+
+/* ───────── 안드로이드 앱: 노트북 속 진짜 유튜브 ─────────
+   유튜브 브라우저는 앱(MainActivity.java)이 게임 위에 따로 띄우고, 여기서는 노트북 화면 꼭짓점만 알려 준다. */
+function initAndroid() {
+  document.body.classList.add('android');
+  const androidGo = raw => { const v = parseYouTube(raw); ANDROID.go(v && v.id ? 'https://m.youtube.com/watch?v=' + v.id + (v.start ? '&t=' + v.start + 's' : '') : raw); };
+  setupPick(androidGo);
+  $('#pickForm span').textContent = '링크를 붙여넣거나 검색어를 쓰세요. 노트북 화면을 직접 눌러도 돼요.';
+  $('#pickInput').placeholder = '유튜브 링크 또는 검색어';
+  $('#urlForm').addEventListener('submit', e => { e.preventDefault(); const v = urlInput.value.trim(); if (v) { urlInput.blur(); androidGo(v); } });
+  urlInput.addEventListener('focus', () => urlInput.select());
+  $('#navBack').addEventListener('click', () => ANDROID.nav('back'));
+  $('#navFwd').addEventListener('click', () => ANDROID.nav('forward'));
+  $('#navReload').addEventListener('click', () => ANDROID.nav('reload'));
+  $('#navHome').addEventListener('click', () => ANDROID.nav('home'));
+  window.WR_android = {
+    probe: s => { try { applyProbe(s); } catch {} },
+    url: u => { if (document.activeElement !== urlInput) urlInput.value = u.replace(/^https?:\/\/(www\.|m\.)?/, ''); },
+  };
+  dollyTarget = dolly = 0.9;
+  ANDROID.ready(PROBE);
+}
+let lastQuad = '';
+function sendQuad() {
+  if (!ANDROID || !H) return;
+  const r = devicePixelRatio, out = [];
+  for (const [x, y] of [[0, BAR_H], [WRAP_W, BAR_H], [WRAP_W, WRAP_H], [0, WRAP_H]]) { const [u, v] = apply3(H, x, y); out.push((u * r).toFixed(1), (v * r).toFixed(1)); }
+  const q = out.join(',');
+  if (q !== lastQuad) { lastQuad = q; ANDROID.quad(q); }
+}
+
 function webGo(raw) {
   urlInput.blur();
   const v = parseYouTube(raw);
@@ -677,7 +715,7 @@ function frame() {
 resetLook(); resize(); placeCamera(); updateCable();
 await loadCharacters(ctx);
 await loadThemes();
-if (IS_APP) initBrowser(); else initWebPlayer();
+if (IS_APP) initBrowser(); else if (ANDROID) initAndroid(); else initWebPlayer();
 if (TOUCH) $('.hintline').textContent = '친구를 누르면 그 친구의 세계로 바뀌어요 · 두 손가락: 가까이/멀리';
 window.WR = { ctx, setTheme, themes, chars, get dolly() { return dolly; }, set dolly(v) { dollyTarget = dolly = v; } };
 requestAnimationFrame(frame);

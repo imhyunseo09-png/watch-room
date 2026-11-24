@@ -1,0 +1,37 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.watchroom.app'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.watchroom.app'
+        minSdk 29
+        targetSdk 34
+        versionCode (System.getenv('GITHUB_RUN_NUMBER') ? System.getenv('GITHUB_RUN_NUMBER').toInteger() : 1)
+        versionName '1.0'
+    }
+    // 늘 같은 열쇠로 서명해야 새 버전을 지우지 않고 덮어 설치할 수 있다 (개인용 앱이라 저장소에 둠)
+    signingConfigs {
+        room {
+            storeFile file('watchroom.keystore')
+            storePassword 'watchroom'
+            keyAlias 'watchroom'
+            keyPassword 'watchroom'
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.room
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    androidResources { ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~' }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}

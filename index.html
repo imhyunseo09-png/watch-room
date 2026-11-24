@@ -12,7 +12,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <script>
   // 폰·브라우저에서는 앱으로 설치할 수 있게 한다(홈 화면 아이콘). 데스크톱 앱(Electron)은 필요 없음.
-  if (!/\bElectron\//.test(navigator.userAgent) && 'serviceWorker' in navigator && location.protocol === 'https:')
+  if (!/\bElectron\//.test(navigator.userAgent) && !window.AndroidRoom && 'serviceWorker' in navigator && location.protocol === 'https:')
     addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 </script>
 <script type="importmap">
@@ -94,6 +94,9 @@ body.web #urlInput{font-size:22px;height:32px}
 #ytEmpty a{color:#7cc4ff}
 #ytHost.on #ytEmpty{display:none}
 #rotate{display:none}
+body.android #pasteBtn,body.android #cursor{display:none!important}
+body.android #screenWrap{cursor:auto}
+body.android #bar button,body.android #urlInput{cursor:pointer}
 .pickBtn{height:46px;padding:0 18px;border-radius:999px;border:0;background:#ff4e45;color:#fff;font-family:var(--font-display);font-size:16px;white-space:nowrap}
 .pickBtn[hidden]{display:none}
 #pickBox{position:fixed;inset:0;z-index:70;display:flex;align-items:center;justify-content:center;background:rgba(10,8,24,.55);padding:12px}
